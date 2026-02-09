@@ -18,59 +18,53 @@ namespace PackagingScann.Common
         public static void SaveCSV(DataTable dt, string fullPath)
         {
             FileInfo fi = new FileInfo(fullPath);
-            FileStream fs = null;
-            StreamWriter sw = null;
             if (!fi.Directory.Exists)
             {
                 fi.Directory.Create();
             }
-            string data = "";
-            //var utf8Encoding = new System.Text.UTF8Encoding(false);
-            if (File.Exists(fullPath))
-            {
-                fs = new FileStream(fullPath, System.IO.FileMode.Append, System.IO.FileAccess.Write);
-                sw = new StreamWriter(fs, Encoding.GetEncoding("GB2312"));
-            }
-            else
-            {
-                fs = new FileStream(fullPath, System.IO.FileMode.Create, System.IO.FileAccess.Write);
-                //写出列名称
-                for (int i = 0; i < dt.Columns.Count; i++)
-                {
-                    data += dt.Columns[i].ColumnName.ToString();
-                    if (i < dt.Columns.Count - 1)
-                    {
-                        data += ",";
-                    }
-                }
-                sw = new StreamWriter(fs, Encoding.GetEncoding("GB2312"));//utf8Encoding);
-                sw.WriteLine(data);
+            var encoding = Encoding.GetEncoding("GB2312");
+            bool append = File.Exists(fullPath);
 
-            }
-            //写出各行数据
-            for (int i = 0; i < dt.Rows.Count; i++)
+            using (var fs = new FileStream(fullPath, append ? FileMode.Append : FileMode.Create, FileAccess.Write))
+            using (var sw = new StreamWriter(fs, encoding))
             {
-                data = "";
-                for (int j = 0; j < dt.Columns.Count; j++)
+                if (!append)
                 {
-                    string str = dt.Rows[i][j].ToString();
-                    str = str.Replace("\"", "\"\"");//替换英文冒号 英文冒号需要换成两个冒号
-                    if (str.Contains(',') || str.Contains('"')
-                        || str.Contains('\r') || str.Contains('\n')) //含逗号 冒号 换行符的需要放到引号中
+                    var headerBuilder = new StringBuilder();
+                    for (int i = 0; i < dt.Columns.Count; i++)
                     {
-                        str = string.Format("\"{0}\"", str);
+                        headerBuilder.Append(dt.Columns[i].ColumnName);
+                        if (i < dt.Columns.Count - 1)
+                        {
+                            headerBuilder.Append(",");
+                        }
                     }
-
-                    data += str;
-                    if (j < dt.Columns.Count - 1)
-                    {
-                        data += ",";
-                    }
+                    sw.WriteLine(headerBuilder.ToString());
                 }
-                sw.WriteLine(data);
+
+                var rowBuilder = new StringBuilder();
+                for (int i = 0; i < dt.Rows.Count; i++)
+                {
+                    rowBuilder.Clear();
+                    for (int j = 0; j < dt.Columns.Count; j++)
+                    {
+                        string str = dt.Rows[i][j].ToString();
+                        str = str.Replace("\"", "\"\"");//替换英文冒号 英文冒号需要换成两个冒号
+                        if (str.Contains(',') || str.Contains('"')
+                            || str.Contains('\r') || str.Contains('\n')) //含逗号 冒号 换行符的需要放到引号中
+                        {
+                            str = string.Format("\"{0}\"", str);
+                        }
+
+                        rowBuilder.Append(str);
+                        if (j < dt.Columns.Count - 1)
+                        {
+                            rowBuilder.Append(",");
+                        }
+                    }
+                    sw.WriteLine(rowBuilder.ToString());
+                }
             }
-            sw.Close();
-            fs.Close();
         }
 
         /// <summary>
@@ -81,55 +75,53 @@ namespace PackagingScann.Common
         public static DataTable OpenCSV(string filePath)
         {
             DataTable dt = new DataTable();
-            FileStream fs = new FileStream(filePath, System.IO.FileMode.Open, System.IO.FileAccess.Read);
-            StreamReader sr = new StreamReader(fs, Encoding.GetEncoding("gb2312"));//("gb2312"))
-            //string fileContent = sr.ReadToEnd();
-            //encoding = sr.CurrentEncoding;
-            //记录每次读取的一行记录
-            string strLine = "";
-            //记录每行记录中的各字段内容
-            string[] aryLine = null;
-            string[] tableHead = null;
-            //标示列数
-            int columnCount = 0;
-            //标示是否是读取的第一行
-            bool IsFirst = true;
-            //逐行读取CSV中的数据
-            while ((strLine = sr.ReadLine()) != null)
+            var encoding = Encoding.GetEncoding("gb2312");
+            using (var fs = new FileStream(filePath, System.IO.FileMode.Open, System.IO.FileAccess.Read))
+            using (var sr = new StreamReader(fs, encoding))
             {
-                //strLine = Common.ConvertStringUTF8(strLine, encoding);
-                //strLine = Common.ConvertStringUTF8(strLine);
-
-                if (IsFirst == true)
+                //记录每次读取的一行记录
+                string strLine = "";
+                //记录每行记录中的各字段内容
+                string[] aryLine = null;
+                string[] tableHead = null;
+                //标示列数
+                int columnCount = 0;
+                //标示是否是读取的第一行
+                bool IsFirst = true;
+                //逐行读取CSV中的数据
+                while ((strLine = sr.ReadLine()) != null)
                 {
-                    tableHead = strLine.Split(',');
-                    IsFirst = false;
-                    columnCount = tableHead.Length;
-                    //创建列
-                    for (int i = 0; i < columnCount; i++)
+                    //strLine = Common.ConvertStringUTF8(strLine, encoding);
+                    //strLine = Common.ConvertStringUTF8(strLine);
+
+                    if (IsFirst == true)
                     {
-                        DataColumn dc = new DataColumn(tableHead[i]);
-                        dt.Columns.Add(dc);
+                        tableHead = strLine.Split(',');
+                        IsFirst = false;
+                        columnCount = tableHead.Length;
+                        //创建列
+                        for (int i = 0; i < columnCount; i++)
+                        {
+                            DataColumn dc = new DataColumn(tableHead[i]);
+                            dt.Columns.Add(dc);
+                        }
+                    }
+                    else
+                    {
+                        aryLine = strLine.Split(',');
+                        DataRow dr = dt.NewRow();
+                        for (int j = 0; j < columnCount; j++)
+                        {
+                            dr[j] = aryLine[j].Trim();
+                        }
+                        dt.Rows.Add(dr);
                     }
                 }
-                else
+                if (aryLine != null && aryLine.Length > 0)
                 {
-                    aryLine = strLine.Split(',');
-                    DataRow dr = dt.NewRow();
-                    for (int j = 0; j < columnCount; j++)
-                    {
-                        dr[j] = aryLine[j].Trim();
-                    }
-                    dt.Rows.Add(dr);
+                    dt.DefaultView.Sort = tableHead[0] + " " + "asc";
                 }
             }
-            if (aryLine != null && aryLine.Length > 0)
-            {
-                dt.DefaultView.Sort = tableHead[0] + " " + "asc";
-            }
-
-            sr.Close();
-            fs.Close();
             return dt;
         }
 
