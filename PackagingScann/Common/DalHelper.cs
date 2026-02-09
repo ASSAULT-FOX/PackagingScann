@@ -8,17 +8,22 @@ namespace PackagingScann.Common
 {
     public class DalHelper
     {
+        private static SQLiteConnection CreateConnection()
+        {
+            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
+            return new SQLiteConnection(config);
+        }
+
         #region 将原始数据存入SQLite数据库
         public static void WriteData(string ProductSN, string CaseNumber, string OuterBoxSN, string HuaWeiSN, string MesResult)
         {
-            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
-            SQLiteConnection conn = new SQLiteConnection(config);
-            conn.Open();
-            try
+            using (SQLiteConnection conn = CreateConnection())
             {
-                SQLiteCommand cmd = new SQLiteCommand();
-                cmd.Connection = conn;
-                cmd.CommandText = @"INSERT INTO ProductionData (
+                conn.Open();
+                using (SQLiteCommand cmd = new SQLiteCommand())
+                {
+                    cmd.Connection = conn;
+                    cmd.CommandText = @"INSERT INTO ProductionData (
                                ProductSN,
                                CaseNumber,
                                OuterBoxSN,
@@ -35,21 +40,14 @@ namespace PackagingScann.Common
                                @UpdateTime
                            );";
 
-                cmd.Parameters.Add("ProductSN", DbType.String).Value = ProductSN;
-                cmd.Parameters.Add("CaseNumber", DbType.String).Value = CaseNumber;
-                cmd.Parameters.Add("OuterBoxSN", DbType.String).Value = OuterBoxSN;
-                cmd.Parameters.Add("HuaWeiSN", DbType.String).Value = HuaWeiSN;
-                cmd.Parameters.Add("MesResult", DbType.String).Value = MesResult;
-                cmd.Parameters.Add("UpdateTime", DbType.DateTime).Value = DateTime.Now;
-                cmd.ExecuteNonQuery();
-            }
-            catch (Exception e)
-            {
-                throw e;
-            }
-            finally
-            {
-                if (conn != null) conn.Close();
+                    cmd.Parameters.Add("ProductSN", DbType.String).Value = ProductSN;
+                    cmd.Parameters.Add("CaseNumber", DbType.String).Value = CaseNumber;
+                    cmd.Parameters.Add("OuterBoxSN", DbType.String).Value = OuterBoxSN;
+                    cmd.Parameters.Add("HuaWeiSN", DbType.String).Value = HuaWeiSN;
+                    cmd.Parameters.Add("MesResult", DbType.String).Value = MesResult;
+                    cmd.Parameters.Add("UpdateTime", DbType.DateTime).Value = DateTime.Now;
+                    cmd.ExecuteNonQuery();
+                }
             }
         }
         #endregion
@@ -58,8 +56,7 @@ namespace PackagingScann.Common
         public static DataTable GetDataInfo()
         {
             DataTable dt = new DataTable();
-            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
-            using (SQLiteConnection conn = new SQLiteConnection(config))
+            using (SQLiteConnection conn = CreateConnection())
             {
                 conn.Open();
                 string sql = @"SELECT  ProductSN AS 产品条码,
@@ -84,8 +81,7 @@ namespace PackagingScann.Common
         public static DataTable QueryDataInfo(string ProductSN, string CaseNumber, string MesResult)
         {
             DataTable dt = new DataTable();
-            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
-            using (SQLiteConnection conn = new SQLiteConnection(config))
+            using (SQLiteConnection conn = CreateConnection())
             {
                 conn.Open();
                 string sql = @"SELECT  ProductSN AS 产品条码,
@@ -96,23 +92,34 @@ namespace PackagingScann.Common
        UpdateTime AS 更新时间
   FROM ProductionData
   WHERE 1=1";
+                var parameters = new List<SQLiteParameter>();
 
                 if (!string.IsNullOrEmpty(ProductSN))
                 {
-                    sql += " AND ProductSN LIKE '%" + ProductSN + @"%'";
+                    sql += " AND ProductSN LIKE @ProductSN";
+                    parameters.Add(new SQLiteParameter("@ProductSN", $"%{ProductSN}%"));
                 }
                 if (!string.IsNullOrEmpty(CaseNumber))
                 {
-                    sql += " AND CaseNumber LIKE '%" + CaseNumber + @"%'";
+                    sql += " AND CaseNumber LIKE @CaseNumber";
+                    parameters.Add(new SQLiteParameter("@CaseNumber", $"%{CaseNumber}%"));
                 }
                 if (!string.IsNullOrEmpty(MesResult))
                 {
-                    sql += " AND MesResult LIKE '%" + MesResult + @"%'";
+                    sql += " AND MesResult LIKE @MesResult";
+                    parameters.Add(new SQLiteParameter("@MesResult", $"%{MesResult}%"));
                 }
                 sql += " ORDER BY FN_ID DESC limit 0,1000;";
-                using (SQLiteDataAdapter ap = new SQLiteDataAdapter(sql, conn))
+                using (SQLiteCommand cmd = new SQLiteCommand(sql, conn))
                 {
-                    ap.Fill(dt);
+                    if (parameters.Count > 0)
+                    {
+                        cmd.Parameters.AddRange(parameters.ToArray());
+                    }
+                    using (SQLiteDataAdapter ap = new SQLiteDataAdapter(cmd))
+                    {
+                        ap.Fill(dt);
+                    }
                 }
             }
             return dt;
@@ -122,65 +129,48 @@ namespace PackagingScann.Common
 
         public static void WriteLogInfo(string MessageInfo)
         {
-            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
-            SQLiteConnection conn = new SQLiteConnection(config);
-            conn.Open();
-            try
+            using (SQLiteConnection conn = CreateConnection())
             {
-                SQLiteCommand cmd = new SQLiteCommand();
-                cmd.Connection = conn;
-                cmd.CommandText = @"INSERT INTO SystemLog (
+                conn.Open();
+                using (SQLiteCommand cmd = new SQLiteCommand())
+                {
+                    cmd.Connection = conn;
+                    cmd.CommandText = @"INSERT INTO SystemLog (
                               MessageInfo,UpdateTime 
                           )
                           VALUES (
                               @MessageInfo,@UpdateTime
                           );";
-                cmd.Parameters.Add("MessageInfo", DbType.String).Value = MessageInfo;
-                cmd.Parameters.Add("UpdateTime", DbType.DateTime).Value = DateTime.Now;
-                cmd.ExecuteNonQuery();
-            }
-            catch (Exception e)
-            {
-                throw e;
-            }
-            finally
-            {
-                if (conn != null) conn.Close();
+                    cmd.Parameters.Add("MessageInfo", DbType.String).Value = MessageInfo;
+                    cmd.Parameters.Add("UpdateTime", DbType.DateTime).Value = DateTime.Now;
+                    cmd.ExecuteNonQuery();
+                }
             }
         }
 
         public static void DELETEData()
         {
-            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
-            SQLiteConnection conn = new SQLiteConnection(config);
-            conn.Open();
-            try
+            using (SQLiteConnection conn = CreateConnection())
             {
-                SQLiteCommand cmd = new SQLiteCommand();
-                cmd.Connection = conn;
-                cmd.CommandText = @"DELETE FROM ProductionData WHERE date('now', '-7 day') > date(UpdateTime);DELETE FROM SystemLog WHERE date('now', '-7 day') > date(UpdateTime);";
-                cmd.ExecuteNonQuery();
-            }
-            catch (Exception e)
-            {
-                throw e;
-            }
-            finally
-            {
-                if (conn != null) conn.Close();
+                conn.Open();
+                using (SQLiteCommand cmd = new SQLiteCommand())
+                {
+                    cmd.Connection = conn;
+                    cmd.CommandText = @"DELETE FROM ProductionData WHERE date('now', '-7 day') > date(UpdateTime);DELETE FROM SystemLog WHERE date('now', '-7 day') > date(UpdateTime);";
+                    cmd.ExecuteNonQuery();
+                }
             }
         }
 
         public static void InsertHonorBox(String code)
         {
-            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
-            SQLiteConnection conn = new SQLiteConnection(config);
-            conn.Open();
-            try
+            using (SQLiteConnection conn = CreateConnection())
             {
-                SQLiteCommand cmd = new SQLiteCommand();
-                cmd.Connection = conn;
-                cmd.CommandText = @"INSERT INTO HONOR_BOX (
+                conn.Open();
+                using (SQLiteCommand cmd = new SQLiteCommand())
+                {
+                    cmd.Connection = conn;
+                    cmd.CommandText = @"INSERT INTO HONOR_BOX (
                               Code,
                               UpdateTime 
                           )
@@ -188,29 +178,21 @@ namespace PackagingScann.Common
                               @Code,
                               @UpdateTime
                           );";
-                cmd.Parameters.Add("Code", DbType.String).Value = code;
-                cmd.Parameters.Add("UpdateTime", DbType.DateTime).Value = DateTime.Now;
-                cmd.ExecuteNonQuery();
-            }
-            catch (Exception e)
-            {
-                throw e;
-            }
-            finally
-            {
-                if (conn != null) conn.Close();
+                    cmd.Parameters.Add("Code", DbType.String).Value = code;
+                    cmd.Parameters.Add("UpdateTime", DbType.DateTime).Value = DateTime.Now;
+                    cmd.ExecuteNonQuery();
+                }
             }
         }
         public static void InsertHuaweiBox(String code)
         {
-            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
-            SQLiteConnection conn = new SQLiteConnection(config);
-            conn.Open();
-            try
+            using (SQLiteConnection conn = CreateConnection())
             {
-                SQLiteCommand cmd = new SQLiteCommand();
-                cmd.Connection = conn;
-                cmd.CommandText = @"INSERT INTO HUAWEI_BOX (
+                conn.Open();
+                using (SQLiteCommand cmd = new SQLiteCommand())
+                {
+                    cmd.Connection = conn;
+                    cmd.CommandText = @"INSERT INTO HUAWEI_BOX (
                               Code,
                               UpdateTime 
                           )
@@ -218,30 +200,22 @@ namespace PackagingScann.Common
                               @Code,
                               @UpdateTime
                           );";
-                cmd.Parameters.Add("Code", DbType.String).Value = code;
-                cmd.Parameters.Add("UpdateTime", DbType.DateTime).Value = DateTime.Now;
-                cmd.ExecuteNonQuery();
-            }
-            catch (Exception e)
-            {
-                throw e;
-            }
-            finally
-            {
-                if (conn != null) conn.Close();
+                    cmd.Parameters.Add("Code", DbType.String).Value = code;
+                    cmd.Parameters.Add("UpdateTime", DbType.DateTime).Value = DateTime.Now;
+                    cmd.ExecuteNonQuery();
+                }
             }
         }
         
         public static void InsertHuaweiASN(String code)
         {
-            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
-            SQLiteConnection conn = new SQLiteConnection(config);
-            conn.Open();
-            try
+            using (SQLiteConnection conn = CreateConnection())
             {
-                SQLiteCommand cmd = new SQLiteCommand();
-                cmd.Connection = conn;
-                cmd.CommandText = @"INSERT INTO HUAWEI_ASN (
+                conn.Open();
+                using (SQLiteCommand cmd = new SQLiteCommand())
+                {
+                    cmd.Connection = conn;
+                    cmd.CommandText = @"INSERT INTO HUAWEI_ASN (
                               Code,
                               UpdateTime 
                           )
@@ -249,17 +223,10 @@ namespace PackagingScann.Common
                               @Code,
                               @UpdateTime
                           );";
-                cmd.Parameters.Add("Code", DbType.String).Value = code;
-                cmd.Parameters.Add("UpdateTime", DbType.DateTime).Value = DateTime.Now;
-                cmd.ExecuteNonQuery();
-            }
-            catch (Exception e)
-            {
-                throw e;
-            }
-            finally
-            {
-                if (conn != null) conn.Close();
+                    cmd.Parameters.Add("Code", DbType.String).Value = code;
+                    cmd.Parameters.Add("UpdateTime", DbType.DateTime).Value = DateTime.Now;
+                    cmd.ExecuteNonQuery();
+                }
             }
         }
 
@@ -267,8 +234,7 @@ namespace PackagingScann.Common
         public static DataTable QueryHUAWEIBox(String Code)
         {
             DataTable dt = new DataTable();
-            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
-            using (SQLiteConnection conn = new SQLiteConnection(config))
+            using (SQLiteConnection conn = CreateConnection())
             {
                 conn.Open();
                 string sql = @"SELECT  Code AS 外箱条码,
@@ -278,11 +244,18 @@ namespace PackagingScann.Common
 
                 if (!string.IsNullOrEmpty(Code))
                 {
-                    sql += " AND Code LIKE '%" + Code + @"%'";
+                    sql += " AND Code LIKE @Code";
                 }
-                using (SQLiteDataAdapter ap = new SQLiteDataAdapter(sql, conn))
+                using (SQLiteCommand cmd = new SQLiteCommand(sql, conn))
                 {
-                    ap.Fill(dt);
+                    if (!string.IsNullOrEmpty(Code))
+                    {
+                        cmd.Parameters.AddWithValue("@Code", $"%{Code}%");
+                    }
+                    using (SQLiteDataAdapter ap = new SQLiteDataAdapter(cmd))
+                    {
+                        ap.Fill(dt);
+                    }
                 }
             }
             return dt;
@@ -290,8 +263,7 @@ namespace PackagingScann.Common
         public static DataTable QueryHUAWEIASN(String Code)
         {
             DataTable dt = new DataTable();
-            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
-            using (SQLiteConnection conn = new SQLiteConnection(config))
+            using (SQLiteConnection conn = CreateConnection())
             {
                 conn.Open();
                 string sql = @"SELECT  Code AS 华为条码,
@@ -301,11 +273,18 @@ namespace PackagingScann.Common
 
                 if (!string.IsNullOrEmpty(Code))
                 {
-                    sql += " AND Code LIKE '%" + Code + @"%'";
+                    sql += " AND Code LIKE @Code";
                 }
-                using (SQLiteDataAdapter ap = new SQLiteDataAdapter(sql, conn))
+                using (SQLiteCommand cmd = new SQLiteCommand(sql, conn))
                 {
-                    ap.Fill(dt);
+                    if (!string.IsNullOrEmpty(Code))
+                    {
+                        cmd.Parameters.AddWithValue("@Code", $"%{Code}%");
+                    }
+                    using (SQLiteDataAdapter ap = new SQLiteDataAdapter(cmd))
+                    {
+                        ap.Fill(dt);
+                    }
                 }
             }
             return dt;
@@ -313,8 +292,7 @@ namespace PackagingScann.Common
         public static DataTable QueryHONORBox(String Code)
         {
             DataTable dt = new DataTable();
-            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
-            using (SQLiteConnection conn = new SQLiteConnection(config))
+            using (SQLiteConnection conn = CreateConnection())
             {
                 conn.Open();
                 string sql = @"SELECT  Code AS 外箱条码,
@@ -324,11 +302,18 @@ namespace PackagingScann.Common
 
                 if (!string.IsNullOrEmpty(Code))
                 {
-                    sql += " AND Code LIKE '%" + Code + @"%'";
+                    sql += " AND Code LIKE @Code";
                 }
-                using (SQLiteDataAdapter ap = new SQLiteDataAdapter(sql, conn))
+                using (SQLiteCommand cmd = new SQLiteCommand(sql, conn))
                 {
-                    ap.Fill(dt);
+                    if (!string.IsNullOrEmpty(Code))
+                    {
+                        cmd.Parameters.AddWithValue("@Code", $"%{Code}%");
+                    }
+                    using (SQLiteDataAdapter ap = new SQLiteDataAdapter(cmd))
+                    {
+                        ap.Fill(dt);
+                    }
                 }
             }
             return dt;
@@ -336,8 +321,7 @@ namespace PackagingScann.Common
 
         public static bool CheckHonorBox(String code)
         {
-            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
-            using (SQLiteConnection conn = new SQLiteConnection(config))
+            using (SQLiteConnection conn = CreateConnection())
             {
                 conn.Open();
                 string sql = @"SELECT COUNT(*) FROM HONOR_BOX WHERE Code = @Code";
@@ -360,8 +344,7 @@ namespace PackagingScann.Common
         }
         public static bool CheckHuaweiBox(String code)
         {
-            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
-            using (SQLiteConnection conn = new SQLiteConnection(config))
+            using (SQLiteConnection conn = CreateConnection())
             {
                 conn.Open();
                 string sql = @"SELECT COUNT(*) FROM HUAWEI_BOX WHERE Code = @Code";
@@ -384,8 +367,7 @@ namespace PackagingScann.Common
         }
         public static bool CheckHuaweiASN(String code)
         {
-            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
-            using (SQLiteConnection conn = new SQLiteConnection(config))
+            using (SQLiteConnection conn = CreateConnection())
             {
                 conn.Open();
                 string sql = @"SELECT COUNT(*) FROM HUAWEI_ASN WHERE Code = @Code";
@@ -409,8 +391,7 @@ namespace PackagingScann.Common
 
         public static bool DeleteHUAWEIBox(String code)
         {
-            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
-            using (SQLiteConnection conn = new SQLiteConnection(config))
+            using (SQLiteConnection conn = CreateConnection())
             {
                 conn.Open();
                 string sql = @"DELETE FROM HUAWEI_BOX WHERE Code = @Code;";
@@ -418,23 +399,14 @@ namespace PackagingScann.Common
                 using (SQLiteCommand cmd = new SQLiteCommand(sql, conn))
                 {
                     cmd.Parameters.AddWithValue("@Code", code);
-                    int count = Convert.ToInt32(cmd.ExecuteScalar());
-
-                    if (count == 0)
-                    {
-                        return true;
-                    }
-                    else
-                    {
-                        return false;
-                    }
+                    cmd.ExecuteNonQuery();
+                    return true;
                 }
             }
         }
         public static bool DeleteHUAWEIASN(String code)
         {
-            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
-            using (SQLiteConnection conn = new SQLiteConnection(config))
+            using (SQLiteConnection conn = CreateConnection())
             {
                 conn.Open();
                 string sql = @"DELETE FROM HUAWEI_ASN WHERE Code = @Code;";
@@ -442,23 +414,14 @@ namespace PackagingScann.Common
                 using (SQLiteCommand cmd = new SQLiteCommand(sql, conn))
                 {
                     cmd.Parameters.AddWithValue("@Code", code);
-                    int count = Convert.ToInt32(cmd.ExecuteScalar());
-
-                    if (count == 0)
-                    {
-                        return true;
-                    }
-                    else
-                    {
-                        return false;
-                    }
+                    cmd.ExecuteNonQuery();
+                    return true;
                 }
             }
         }
         public static bool DeleteHONORBox(String code)
         {
-            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
-            using (SQLiteConnection conn = new SQLiteConnection(config))
+            using (SQLiteConnection conn = CreateConnection())
             {
                 conn.Open();
                 string sql = @"DELETE FROM HONOR_BOX WHERE Code = @Code;";
@@ -466,24 +429,15 @@ namespace PackagingScann.Common
                 using (SQLiteCommand cmd = new SQLiteCommand(sql, conn))
                 {
                     cmd.Parameters.AddWithValue("@Code", code);
-                    int count = Convert.ToInt32(cmd.ExecuteScalar());
-
-                    if (count == 0)
-                    {
-                        return true;
-                    }
-                    else
-                    {
-                        return false;
-                    }
+                    cmd.ExecuteNonQuery();
+                    return true;
                 }
             }
         }
 
         public static bool ClearHONORBox()
         {
-            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
-            using (SQLiteConnection conn = new SQLiteConnection(config))
+            using (SQLiteConnection conn = CreateConnection())
             {
                 conn.Open();
                 string sql = @"DELETE FROM HONOR_BOX;";
@@ -497,8 +451,7 @@ namespace PackagingScann.Common
         }
         public static bool ClearHUAWEIBox()
         {
-            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
-            using (SQLiteConnection conn = new SQLiteConnection(config))
+            using (SQLiteConnection conn = CreateConnection())
             {
                 conn.Open();
 
@@ -522,9 +475,7 @@ namespace PackagingScann.Common
         /// <param name="code"></param>
         public static void DelBoxSN(string code)
         {
-            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
-
-            using (var conn = new SQLiteConnection(config))
+            using (var conn = CreateConnection())
             using (var cmd = new SQLiteCommand("DELETE FROM ProductionData WHERE CaseNumber = @CaseNumber", conn))
             {
                 conn.Open();
@@ -538,7 +489,10 @@ namespace PackagingScann.Common
         /// </summary>
         public static HashSet<string> CheckExistingProductSN(string caseNumber, List<string> productSNs)
         {
-            string config = System.Configuration.ConfigurationManager.ConnectionStrings["sqlite"].ConnectionString;
+            if (productSNs == null || productSNs.Count == 0)
+            {
+                return new HashSet<string>();
+            }
 
             string inClause = string.Join(",", productSNs.Select((_, i) => $"@p{i}"));
 
@@ -549,7 +503,7 @@ namespace PackagingScann.Common
                         AND ProductSN IN ({inClause})
                         AND MesResult LIKE 'OK%'";
 
-            using (var conn = new SQLiteConnection(config))
+            using (var conn = CreateConnection())
             using (var cmd = new SQLiteCommand(sql, conn))
             {
                 conn.Open();
